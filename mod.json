@@ -1,0 +1,20 @@
+{
+  "geode": "v4.0.0",
+  "gd": { "android": "2.2081" },
+  "id": "arkew.gd-physics-toolkit",
+  "name": "GD Physics Toolkit",
+  "version": "v0.1.0",
+  "developer": "Arkew",
+  "description": "Android Geometry Dash practice/debug toolkit prototype.",
+  "tags": ["gameplay", "utility", "developer", "offline"],
+  "settings": {
+    "target-fps": {
+      "name": "Target FPS",
+      "description": "Requested Cocos2d animation interval target. Device/display limits still apply.",
+      "type": "integer",
+      "default": 60,
+      "min": 30,
+      "max": 360
+    }
+  }
+}
