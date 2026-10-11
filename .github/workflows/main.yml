@@ -22,5 +22,5 @@ jobs:
         uses: geode-sdk/build-geode-mod@main
         with:
           sdk: "3.0.0"
-          target: android64
+          target: Android64
           
