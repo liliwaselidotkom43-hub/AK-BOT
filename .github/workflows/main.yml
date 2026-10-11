@@ -1,7 +1,7 @@
 
 name: Build GD Physics Toolkit
 
-'on':
+on:
   workflow_dispatch:
   push:
     paths:
@@ -13,6 +13,7 @@ name: Build GD Physics Toolkit
 jobs:
   build:
     runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -22,4 +23,5 @@ jobs:
         with:
           sdk: '3.0.0'
           target: Android64
+          android-ndk-version: '27.3.13750724'
           
