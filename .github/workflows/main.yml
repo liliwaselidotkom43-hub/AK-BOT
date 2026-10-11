@@ -1,24 +1,23 @@
 name: Build GD Physics Toolkit
 
-on:
+'on':
 workflow_dispatch:
 push:
 paths:
-- ".github/workflows/main.yml"
-- "CMakeLists.txt"
-- "mod.json"
-- "src/**"
+- '.github/workflows/main.yml'
+- 'CMakeLists.txt'
+- 'mod.json'
+- 'src/**'
 
 jobs:
 build:
 runs-on: ubuntu-22.04
-
 steps:
-  - name: Checkout source
-    uses: actions/checkout@v4
+- name: Checkout source
+uses: actions/checkout@v4
 
-  - name: Install Geode SDK
+  - name: Build Android mod
     uses: geode-sdk/build-geode-mod@main
     with:
-      sdk: "3.0.0"
+      sdk: '3.0.0'
       target: Android64
