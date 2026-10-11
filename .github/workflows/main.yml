@@ -15,22 +15,24 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Android mod
+        id: build
         uses: geode-sdk/build-geode-mod@main
         with:
           sdk: 'given'
           target: Android64
 
-      - name: Find Geode package
+      - name: List build output
         run: |
-          echo "Searching for Geode packages..."
-          find . -type f -name "*.geode" -print
+          echo "Checking Geode output..."
+          ls -lah "${{ steps.build.outputs.build-output }}"
+          find "${{ steps.build.outputs.build-output }}" -type f -name "*.geode" -print
 
       - name: Upload Geode mod
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: GD-Physics-Toolkit-Android
-          path: '**/*.geode'
+          path: ${{ steps.build.outputs.build-output }}
           if-no-files-found: error
