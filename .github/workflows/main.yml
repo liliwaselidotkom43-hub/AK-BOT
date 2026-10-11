@@ -22,3 +22,10 @@ jobs:
         with:
           sdk: 'given'
           target: Android64
+
+      - name: Upload Geode mod
+        uses: actions/upload-artifact@v4
+        with:
+          name: GD-Physics-Toolkit-Android
+          path: '**/*.geode'
+          if-no-files-found: error
