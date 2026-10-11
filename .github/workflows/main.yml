@@ -13,12 +13,12 @@ jobs:
 build:
 runs-on: ubuntu-22.04
 
-steps:  
-  - name: Checkout source  
-    uses: actions/checkout@v4  
+steps:
+  - name: Checkout source
+    uses: actions/checkout@v4
 
-  - name: Install Geode SDK  
-    uses: geode-sdk/build-geode-mod@main  
-    with:  
-      sdk: "3.0.0"  
+  - name: Install Geode SDK
+    uses: geode-sdk/build-geode-mod@main
+    with:
+      sdk: "3.0.0"
       target: Android64
