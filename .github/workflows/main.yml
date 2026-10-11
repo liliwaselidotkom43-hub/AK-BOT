@@ -1,3 +1,4 @@
+
 name: Build GD Physics Toolkit
 
 on:
@@ -15,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Build Android mod
         id: build
@@ -24,15 +25,31 @@ jobs:
           sdk: 'given'
           target: Android64
 
-      - name: List build output
+      - name: Find Geode files
+        id: find-mod
+        shell: bash
         run: |
-          echo "Checking Geode output..."
-          ls -lah "${{ steps.build.outputs.build-output }}"
-          find "${{ steps.build.outputs.build-output }}" -type f -name "*.geode" -print
+          echo "Searching for .geode files..."
+          find . -type f -name "*.geode" -print
+
+          FILE="$(find . -type f -name "*.geode" -print -quit)"
+
+          if [ -z "$FILE" ]; then
+            echo "ERROR: No .geode file was found."
+            echo "Listing likely build directories:"
+            find . -maxdepth 5 -type d \
+              \( -name bin -o -name build -o -name dist \) \
+              -print
+            exit 1
+          fi
+
+          echo "Found: $FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
       - name: Upload Geode mod
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: GD-Physics-Toolkit-Android
-          path: ${{ steps.build.outputs.build-output }}
+          path: ${{ steps.find-mod.outputs.file }}
           if-no-files-found: error
+          
