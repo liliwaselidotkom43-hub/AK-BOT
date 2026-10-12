@@ -7,9 +7,12 @@
 #include <Geode/ui/Popup.hpp>
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 using namespace geode::prelude;
@@ -24,6 +27,7 @@ struct InputEvent {
 };
 
 static std::vector<InputEvent> macro;
+
 static bool recording = false;
 static bool playing = false;
 static bool noclip = false;
@@ -41,7 +45,6 @@ static float speedValues[] = {0.5f, 1.0f, 1.5f, 2.0f, 3.0f};
 static int speedIndex = 1;
 
 static double accumulator = 0.0;
-static bool debugDrawEnabledByUs = false;
 
 static std::filesystem::path macroFile() {
     return Mod::get()->getSaveDir() / "macro.csv";
@@ -89,14 +92,14 @@ static bool loadMacro() {
     std::vector<InputEvent> loaded;
     std::string line;
 
-    std::getline(in, line); // Header
+    std::getline(in, line);
 
     while (std::getline(in, line)) {
         InputEvent e{};
         int p2 = 0;
         int pressed = 0;
 
-        if (sscanf(
+        if (std::sscanf(
             line.c_str(),
             "%d,%d,%d,%d",
             &e.tick,
@@ -132,36 +135,37 @@ static void record() {
 
     if (!pl) {
         alert(
-            "RECORD MACRO",
-            "Open a level and access Toolkit from the pause menu first."
+            "RECORD",
+            "Open a level first, then open Toolkit."
         );
         return;
     }
 
     if (recording) {
         recording = false;
-        alert("RECORD MACRO", "Recording stopped.");
+        alert("RECORD", "Recording stopped.");
         return;
     }
-
-    pl->togglePracticeMode(true);
 
     macro.clear();
     tick = 0;
     playIndex = 0;
     accumulator = 0.0;
-
     playing = false;
+
+    pl->togglePracticeMode(true);
     recording = true;
 
     alert(
-        "RECORD MACRO",
+        "RECORD",
         "Recording started. Resume the level and play."
     );
 }
 
 static void save() {
-    recording = false;
+    if (recording) {
+        recording = false;
+    }
 
     if (macro.empty()) {
         alert("SAVE", "There are no recorded inputs.");
@@ -179,7 +183,7 @@ static void playMacro() {
     auto pl = PlayLayer::get();
 
     if (!pl) {
-        alert("PLAY", "Open the target level first.");
+        alert("PLAY", "Open a level first.");
         return;
     }
 
@@ -201,7 +205,7 @@ static void playMacro() {
 
     alert(
         "PLAY",
-        "Macro playback prepared. Resume the level."
+        "Macro playback started. Resume the level."
     );
 }
 
@@ -233,7 +237,6 @@ static void toggleHitboxes() {
 
     hitboxes = !hitboxes;
     pl->toggleDebugDraw();
-    debugDrawEnabledByUs = hitboxes;
 
     alert(
         "SHOW HITBOXES",
@@ -257,8 +260,8 @@ static void changeSpeed() {
 
 static void changeFPS() {
     static int fpsValues[] = {60, 120, 144, 240, 360};
-
     static int fpsIndex = 0;
+
     fpsIndex = (fpsIndex + 1) %
         (sizeof(fpsValues) / sizeof(fpsValues[0]));
 
@@ -276,12 +279,11 @@ static void changeTPS() {
     tpsIndex = (tpsIndex + 1) %
         (sizeof(tpsValues) / sizeof(tpsValues[0]));
 
-    bypass = true;
     accumulator = 0.0;
 
     alert(
-        "PHYSICS BYPASS",
-        fmt::format("Target TPS: {}", targetTPS())
+        "TPS",
+        fmt::format("Selected target: {} TPS", targetTPS())
     );
 }
 
@@ -353,9 +355,6 @@ static void playbackInputs(PlayLayer* pl) {
 
 } // namespace Toolkit
 
-// ---------------------------------------------------------
-// Record player inputs
-// ---------------------------------------------------------
 
 class $modify(ToolkitPlayer, PlayerObject) {
     bool pushButton(PlayerButton button) {
@@ -369,9 +368,6 @@ class $modify(ToolkitPlayer, PlayerObject) {
     }
 };
 
-// ---------------------------------------------------------
-// TPS, speedhack, and macro playback
-// ---------------------------------------------------------
 
 class $modify(ToolkitPlayLayer, PlayLayer) {
     void update(float dt) {
@@ -386,9 +382,6 @@ class $modify(ToolkitPlayLayer, PlayLayer) {
             return;
         }
 
-        // Fixed-step update experiment.
-        // Cap the number of steps to avoid an infinite loop
-        // after a long pause or a very large frame time.
         constexpr double maxFrameTime = 0.25;
         constexpr int maxSteps = 24;
 
@@ -420,7 +413,6 @@ class $modify(ToolkitPlayLayer, PlayLayer) {
             ++steps;
         }
 
-        // Avoid accumulating an enormous backlog.
         if (steps == maxSteps)
             Toolkit::accumulator = 0.0;
     }
@@ -438,66 +430,127 @@ class $modify(ToolkitPlayLayer, PlayLayer) {
     }
 };
 
-// ---------------------------------------------------------
-// Toolkit popup
-// ---------------------------------------------------------
+
+// ============================================================
+// PHYSICS TOOLKIT POPUP
+// ============================================================
 
 class PhysicsToolkitPopup : public Popup {
 protected:
     bool init() {
-        if (!Popup::init(340.f, 310.f))
+        if (!Popup::init(360.f, 390.f))
             return false;
 
         setTitle("GD Physics Toolkit");
 
-        auto menu = CCMenu::create();
-        menu->setPosition({
-            m_mainLayer->getContentSize().width / 2.f,
-            m_mainLayer->getContentSize().height / 2.f
-        });
+        auto size = m_mainLayer->getContentSize();
+        float cx = size.width / 2.f;
 
-        m_mainLayer->addChild(menu);
+        auto createPanel = [&](const char* title,
+                               ccColor3B accent,
+                               float y,
+                               float h) {
+            auto panel = CCLayerColor::create(
+                {12, 18, 30, 245},
+                size.width - 24.f,
+                h
+            );
 
-        const char* labels[] = {
-            "RECORD MACRO",
-            "SAVE",
-            "PLAY",
-            "SPEEDHACK",
-            "NOCLIP",
-            "SHOW HITBOXES",
-            "FPS CHANGER",
-            "PHYSICS BYPASS",
-            "CHANGE TPS"
+            panel->setAnchorPoint({0.5f, 0.5f});
+            panel->setPosition({cx, y});
+            m_mainLayer->addChild(panel);
+
+            auto stripe = CCLayerColor::create(
+                {accent.r, accent.g, accent.b, 255},
+                3.f,
+                h - 12.f
+            );
+
+            stripe->setAnchorPoint({0.f, 0.5f});
+            stripe->setPosition({8.f, h / 2.f});
+            panel->addChild(stripe);
+
+            auto heading = CCLabelBMFont::create(
+                title,
+                "goldFont.fnt"
+            );
+
+            heading->setScale(0.48f);
+            heading->setColor(accent);
+            heading->setAnchorPoint({0.f, 0.5f});
+            heading->setPosition({18.f, h - 17.f});
+            panel->addChild(heading);
+
+            return panel;
         };
 
-        for (int i = 0; i < 9; ++i) {
+        auto addButton = [&](CCNode* parent,
+                             const char* label,
+                             int tag,
+                             float x,
+                             float y,
+                             float width) {
             auto sprite = ButtonSprite::create(
-                labels[i],
-                115,
+                label,
+                width,
                 true,
                 "goldFont.fnt",
                 "GJ_button_01.png",
-                30.f,
-                0.65f
+                25.f,
+                0.55f
             );
 
             auto button = CCMenuItemSpriteExtra::create(
                 sprite,
                 this,
-                menu_selector(
-                    PhysicsToolkitPopup::onAction
-                )
+                menu_selector(PhysicsToolkitPopup::onAction)
             );
 
-            button->setTag(i);
+            button->setTag(tag);
 
-            button->setPosition({
-                (i % 2 == 0) ? -67.f : 67.f,
-                90.f - (i / 2) * 48.f
-            });
-
+            auto menu = CCMenu::create();
+            menu->setPosition({x, y});
             menu->addChild(button);
-        }
+            parent->addChild(menu);
+
+            return button;
+        };
+
+        // BOTTING — LIGHT BLUE
+        auto botting = createPanel(
+            "BOTTING",
+            {120, 190, 255},
+            size.height - 65.f,
+            68.f
+        );
+
+        addButton(botting, "RECORD", 0, 57.f, 23.f, 76.f);
+        addButton(botting, "SAVE", 1, 158.f, 23.f, 65.f);
+        addButton(botting, "PLAY", 2, 257.f, 23.f, 65.f);
+
+        // UTILS — MINT GREEN
+        auto utils = createPanel(
+            "UTILS",
+            {120, 255, 190},
+            size.height - 161.f,
+            104.f
+        );
+
+        addButton(utils, "HITBOXES", 3, 75.f, 36.f, 100.f);
+        addButton(utils, "NOCLIP", 4, 255.f, 36.f, 82.f);
+        addButton(utils, "SPEEDHACK", 5, 165.f, 2.f, 100.f);
+
+        // TPS — YELLOW
+        auto tps = createPanel(
+            "TPS",
+            {255, 220, 100},
+            52.f,
+            96.f
+        );
+
+        addButton(tps, "FPS CHANGER", 6, 82.f, 37.f, 110.f);
+        addButton(tps, "PHYSICS BYPASS", 7, 245.f, 37.f, 125.f);
+        addButton(tps, "CHANGE TPS", 8, 165.f, 2.f, 105.f);
 
         return true;
     }
@@ -506,15 +559,41 @@ protected:
         auto node = static_cast<CCNode*>(sender);
 
         switch (node->getTag()) {
-            case 0: Toolkit::record(); break;
-            case 1: Toolkit::save(); break;
-            case 2: Toolkit::playMacro(); break;
-            case 3: Toolkit::changeSpeed(); break;
-            case 4: Toolkit::toggleNoclip(); break;
-            case 5: Toolkit::toggleHitboxes(); break;
-            case 6: Toolkit::changeFPS(); break;
-            case 7: Toolkit::toggleBypass(); break;
-            case 8: Toolkit::changeTPS(); break;
+            case 0:
+                Toolkit::record();
+                break;
+
+            case 1:
+                Toolkit::save();
+                break;
+
+            case 2:
+                Toolkit::playMacro();
+                break;
+
+            case 3:
+                Toolkit::toggleHitboxes();
+                break;
+
+            case 4:
+                Toolkit::toggleNoclip();
+                break;
+
+            case 5:
+                Toolkit::changeSpeed();
+                break;
+
+            case 6:
+                Toolkit::changeFPS();
+                break;
+
+            case 7:
+                Toolkit::toggleBypass();
+                break;
+
+            case 8:
+                Toolkit::changeTPS();
+                break;
         }
     }
 
@@ -532,9 +611,10 @@ public:
     }
 };
 
-// ---------------------------------------------------------
-// Main menu button
-// ---------------------------------------------------------
+
+// ============================================================
+// MAIN MENU BUTTON
+// ============================================================
 
 class $modify(ToolkitMenuLayer, MenuLayer) {
     bool init() {
@@ -561,6 +641,7 @@ class $modify(ToolkitMenuLayer, MenuLayer) {
             );
 
             button->setID("physics-toolkit-button"_spr);
+
             menu->addChild(button);
             menu->updateLayout();
         }
@@ -570,14 +651,16 @@ class $modify(ToolkitMenuLayer, MenuLayer) {
 
     void openToolkit(CCObject*) {
         auto popup = PhysicsToolkitPopup::create();
+
         if (popup)
             popup->show();
     }
 };
 
-// ---------------------------------------------------------
-// Pause menu button
-// ---------------------------------------------------------
+
+// ============================================================
+// PAUSE MENU BUTTON
+// ============================================================
 
 class $modify(ToolkitPauseLayer, PauseLayer) {
     void customSetup() {
@@ -587,6 +670,7 @@ class $modify(ToolkitPauseLayer, PauseLayer) {
             CCDirector::sharedDirector()->getWinSize();
 
         auto menu = CCMenu::create();
+
         menu->setPosition({
             size.width - 60.f,
             size.height - 90.f
@@ -614,6 +698,7 @@ class $modify(ToolkitPauseLayer, PauseLayer) {
 
     void openToolkit(CCObject*) {
         auto popup = PhysicsToolkitPopup::create();
+
         if (popup)
             popup->show();
     }
